@@ -1,5 +1,5 @@
 import { fetchNewsletters } from './gmail/client.js';
-import { parseNewsletter } from './parser/newsletter-parser.js';
+import { parseNewsletter, resolveRedirects } from './parser/newsletter-parser.js';
 import { scrapeArticles } from './parser/web-scraper.js';
 import { sendToSlack } from './slack/messages.js';
 import { translateToKorean, translationCooldown } from './utils/translate.js';
@@ -29,15 +29,19 @@ export async function runPipeline(): Promise<void> {
   }
   logger.info({ count: allArticles.length }, 'Found relevant articles');
 
-  // Step 3: Scrape article content
-  const scrapedArticles = await scrapeArticles(allArticles);
+  // Step 3: Resolve tracking/redirect URLs to actual article URLs
+  const resolvedArticles = await resolveRedirects(allArticles);
+  logger.info({ count: resolvedArticles.length }, 'Resolved redirect URLs');
+
+  // Step 4: Scrape article content
+  const scrapedArticles = await scrapeArticles(resolvedArticles);
   if (scrapedArticles.length === 0) {
     logger.info('No articles could be scraped');
     return;
   }
   logger.info({ count: scrapedArticles.length }, 'Successfully scraped articles');
 
-  // Step 4: Filter by content - only keep articles whose body matches core keywords
+  // Step 5: Filter by content - only keep articles whose body matches core keywords
   const CONTENT_KEYWORDS = [
     'brain health', 'dementia', 'alzheimer',
     'memory', 'attention', 'exercise',
@@ -57,7 +61,7 @@ export async function runPipeline(): Promise<void> {
     return;
   }
 
-  // Step 5: Translate to Korean
+  // Step 6: Translate to Korean
   logger.info({ count: filtered.length }, 'Translating articles to Korean');
   const translated = [];
   for (const article of filtered) {
@@ -75,7 +79,7 @@ export async function runPipeline(): Promise<void> {
     }
   }
 
-  // Step 6: Send summaries to Slack
+  // Step 7: Send summaries to Slack
   await sendToSlack(translated);
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

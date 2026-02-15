@@ -18,7 +18,7 @@ export async function fetchNewsletters(): Promise<NewsletterEmail[]> {
   const senderQuery = config.gmail.newsletterSenders
     .map(s => `from:${s}`)
     .join(' OR ');
-  const query = `(${senderQuery}) newer_than:7d`;
+  const query = `(${senderQuery}) newer_than:1d`;
 
   logger.info({ query }, 'Fetching newsletters from Gmail');
 
