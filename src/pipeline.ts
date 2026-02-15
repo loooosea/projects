@@ -17,10 +17,11 @@ export async function runPipeline(): Promise<void> {
   }
   logger.info({ count: emails.length }, 'Fetched newsletters');
 
-  // Step 2: Parse newsletters and extract relevant article links
+  // Step 2: Parse newsletters and extract relevant article links (1 per newsletter for Vercel timeout)
   const allArticles = emails.flatMap(email => {
     logger.info({ subject: email.subject, from: email.from }, 'Parsing newsletter');
-    return parseNewsletter(email.htmlBody);
+    const articles = parseNewsletter(email.htmlBody);
+    return articles.length > 0 ? [articles[0]] : [];
   });
 
   if (allArticles.length === 0) {

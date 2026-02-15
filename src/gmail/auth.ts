@@ -22,7 +22,15 @@ interface StoredCredentials {
 }
 
 export async function loadCredentials(): Promise<{ clientId: string; clientSecret: string; redirectUri: string }> {
-  const content = await readFile(config.gmail.credentialsPath, 'utf-8');
+  let content: string;
+
+  // Prefer env var (Vercel), fall back to file (local)
+  if (process.env.GMAIL_OAUTH_CREDENTIALS_JSON) {
+    content = process.env.GMAIL_OAUTH_CREDENTIALS_JSON;
+  } else {
+    content = await readFile(config.gmail.credentialsPath, 'utf-8');
+  }
+
   const creds: StoredCredentials = JSON.parse(content);
   const key = creds.installed || creds.web;
   if (!key) throw new Error('Invalid credentials file: missing "installed" or "web" key');
@@ -37,22 +45,31 @@ export async function getAuthenticatedClient(): Promise<OAuth2Client> {
   const { clientId, clientSecret, redirectUri } = await loadCredentials();
   const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 
-  if (!existsSync(config.gmail.tokenPath)) {
+  let tokenContent: string;
+
+  // Prefer env var (Vercel), fall back to file (local)
+  if (process.env.GMAIL_TOKEN_JSON) {
+    tokenContent = process.env.GMAIL_TOKEN_JSON;
+  } else if (existsSync(config.gmail.tokenPath)) {
+    tokenContent = await readFile(config.gmail.tokenPath, 'utf-8');
+  } else {
     throw new Error(
       `Token not found at ${config.gmail.tokenPath}. Run "npm run gmail:setup" first.`,
     );
   }
 
-  const tokenContent = await readFile(config.gmail.tokenPath, 'utf-8');
   const tokens = JSON.parse(tokenContent);
   oauth2Client.setCredentials(tokens);
 
   // Auto-refresh token if expired
   oauth2Client.on('tokens', async (newTokens) => {
     const merged = { ...tokens, ...newTokens };
-    const dir = path.dirname(config.gmail.tokenPath);
-    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
-    await writeFile(config.gmail.tokenPath, JSON.stringify(merged, null, 2));
+    // Only persist to file in local environment
+    if (!process.env.GMAIL_TOKEN_JSON) {
+      const dir = path.dirname(config.gmail.tokenPath);
+      if (!existsSync(dir)) await mkdir(dir, { recursive: true });
+      await writeFile(config.gmail.tokenPath, JSON.stringify(merged, null, 2));
+    }
     logger.info('Gmail token refreshed and saved');
   });
 
