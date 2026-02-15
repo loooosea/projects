@@ -1,5 +1,5 @@
 import { Readability } from '@mozilla/readability';
-import { JSDOM } from 'jsdom';
+import { parseHTML } from 'linkedom';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 import type { ParsedArticle } from './newsletter-parser.js';
@@ -55,8 +55,8 @@ async function scrapeOne(
     }
 
     const html = await response.text();
-    const dom = new JSDOM(html, { url: article.url });
-    const reader = new Readability(dom.window.document);
+    const { document } = parseHTML(html);
+    const reader = new Readability(document);
     const parsed = reader.parse();
 
     if (!parsed || !parsed.textContent?.trim()) {
